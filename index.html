@@ -1,0 +1,239 @@
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TMDb SPA</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <style>
+    body { background-color: #0a0a0a; color: #e0f7f7; font-family: Arial, sans-serif; margin: 0; padding: 0; }
+    h1 { background-color: #008080; padding: 20px; margin: 0; text-align: center; color: #ffffff; }
+    .container { padding: 20px; text-align: center; }
+    .movie-card {
+      background-color: #1c1c1c;
+      border: 1px solid #444;
+      padding: 10px;
+      margin: 10px;
+      display: inline-block;
+      width: 200px;
+      vertical-align: top;
+      border-radius: 8px;
+    }
+    .movie-card img { width: 100%; border-radius: 4px; }
+    .button {
+      background-color: #008080;
+      color: #fff;
+      border: none;
+      padding: 8px 12px;
+      margin: 5px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .button:hover { background-color: #00b3b3; }
+    select, input[type="text"] {
+      padding: 10px;
+      margin: 10px;
+      border-radius: 4px;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>TMDb Movie Explorer</h1>
+  <div class="container">
+    <button id="loginBtn" class="button">Login with TMDb</button>
+    <span id="loginStatus"></span><br>
+    <input type="text" id="searchInput" placeholder="Search for a movie...">
+    <button id="searchBtn" class="button">Search</button>
+    <button id="popularBtn" class="button">Show Popular Movies</button>
+    <button id="favoritesBtn" class="button">My Favorites</button>
+    <button id="watchlistBtn" class="button">My Watchlist</button>
+    <br>
+    <select id="genreSelect"></select>
+    <select id="sortSelect">
+      <option value="popularity.desc">Sort by Popularity</option>
+      <option value="vote_average.desc">Sort by Rating</option>
+      <option value="release_date.desc">Sort by Newest</option>
+    </select>
+    <div id="paginationControls">
+      <button id="prevPage" class="button">Previous</button>
+      <button id="nextPage" class="button">Next</button>
+    </div>
+  </div>
+  <div id="results" class="container"></div>
+
+  <script>
+    const apiKey = e2e32655a6c29555627f49c1ff4a3809;
+    let sessionId = localStorage.getItem('tmdb_session');
+    let accountId = localStorage.getItem('tmdb_account');
+    let currentPage = 1;
+    let selectedGenre = '';
+    let selectedSort = 'popularity.desc';
+
+    function updateLoginStatus() {
+      if (sessionId) {
+        $('#loginStatus').text('Logged in');
+        $('#loginBtn').hide();
+      } else {
+        $('#loginStatus').text('Not logged in');
+      }
+    }
+
+    function authenticateWithTMDb() {
+      $.get(`https://api.themoviedb.org/3/authentication/token/new?api_key=${apiKey}`, function(data) {
+        const requestToken = data.request_token;
+        localStorage.setItem('tmdb_request_token', requestToken);
+        window.open(`https://www.themoviedb.org/authenticate/${requestToken}?redirect_to=${location.href}`, '_blank');
+      });
+    }
+
+    function createSession() {
+      const token = localStorage.getItem('tmdb_request_token');
+      if (token && !sessionId) {
+        $.ajax({
+          url: `https://api.themoviedb.org/3/authentication/session/new?api_key=${apiKey}`,
+          method: 'POST',
+          contentType: 'application/json;charset=utf-8',
+          data: JSON.stringify({ request_token: token }),
+          success: function(data) {
+            sessionId = data.session_id;
+            localStorage.setItem('tmdb_session', sessionId);
+            fetchAccount();
+            updateLoginStatus();
+          }
+        });
+      }
+    }
+
+    function fetchAccount() {
+      if (sessionId && !accountId) {
+        $.get(`https://api.themoviedb.org/3/account?api_key=${apiKey}&session_id=${sessionId}`, function(data) {
+          accountId = data.id;
+          localStorage.setItem('tmdb_account', accountId);
+        });
+      }
+    }
+
+    function renderMovies(movies) {
+      $('#results').empty();
+      movies.forEach(movie => {
+        const img = movie.poster_path ? `https://image.tmdb.org/t/p/w200${movie.poster_path}` : '';
+        const card = `<div class="movie-card">
+                        <img src="${img}" alt="${movie.title}">
+                        <h4>${movie.title}</h4>
+                        <p>Rating: ${movie.vote_average}</p>
+                        <button class="button details-btn" data-id="${movie.id}">Details</button>
+                        <button class="button fav-btn" data-id="${movie.id}">Favorite</button>
+                        <button class="button watch-btn" data-id="${movie.id}">Watchlist</button>
+                      </div>`;
+        $('#results').append(card);
+      });
+    }
+
+    function discoverMovies(page = 1) {
+      let url = `https://api.themoviedb.org/3/discover/movie?api_key=${apiKey}&page=${page}&sort_by=${selectedSort}`;
+      if (selectedGenre) url += `&with_genres=${selectedGenre}`;
+      $.getJSON(url, data => renderMovies(data.results));
+    }
+
+    function searchMovies(query) {
+      $.getJSON(`https://api.themoviedb.org/3/search/movie?api_key=${apiKey}&query=${query}`, function(data) {
+        renderMovies(data.results);
+      });
+    }
+
+    function showFavorites() {
+      $.getJSON(`https://api.themoviedb.org/3/account/${accountId}/favorite/movies?api_key=${apiKey}&session_id=${sessionId}`, data => renderMovies(data.results));
+    }
+
+    function showWatchlist() {
+      $.getJSON(`https://api.themoviedb.org/3/account/${accountId}/watchlist/movies?api_key=${apiKey}&session_id=${sessionId}`, data => renderMovies(data.results));
+    }
+
+    function toggleFavorite(movieId) {
+      $.ajax({
+        url: `https://api.themoviedb.org/3/account/${accountId}/favorite?api_key=${apiKey}&session_id=${sessionId}`,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ media_type: 'movie', media_id: movieId, favorite: true }),
+        success: () => alert('Added to favorites')
+      });
+    }
+
+    function toggleWatchlist(movieId) {
+      $.ajax({
+        url: `https://api.themoviedb.org/3/account/${accountId}/watchlist?api_key=${apiKey}&session_id=${sessionId}`,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ media_type: 'movie', media_id: movieId, watchlist: true }),
+        success: () => alert('Added to watchlist')
+      });
+    }
+
+    function loadGenres() {
+      $.getJSON(`https://api.themoviedb.org/3/genre/movie/list?api_key=${apiKey}`, function(data) {
+        $('#genreSelect').append('<option value="">All Genres</option>');
+        data.genres.forEach(genre => {
+          $('#genreSelect').append(`<option value="${genre.id}">${genre.name}</option>`);
+        });
+      });
+    }
+
+    $('#results').on('click', '.details-btn', function() {
+      const movieId = $(this).data('id');
+      $.getJSON(`https://api.themoviedb.org/3/movie/${movieId}?api_key=${apiKey}&append_to_response=credits,reviews`, function(data) {
+        const genres = data.genres.map(g => g.name).join(', ');
+        const cast = data.credits.cast.slice(0, 5).map(actor => actor.name).join(', ');
+        const reviews = data.reviews.results.slice(0, 1).map(r => `<p><strong>${r.author}:</strong> ${r.content}</p>`).join('');
+        const html = `
+          <div style="text-align:left; max-width:800px; margin:20px auto; background:#1c1c1c; padding:20px; border-radius:10px;">
+            <h2>${data.title}</h2>
+            <p><strong>Release Date:</strong> ${data.release_date}</p>
+            <p><strong>Genres:</strong> ${genres}</p>
+            <p><strong>Rating:</strong> ${data.vote_average}</p>
+            <p><strong>Overview:</strong> ${data.overview}</p>
+            <p><strong>Top Cast:</strong> ${cast}</p>
+            <h3>Top Review</h3>
+            ${reviews || '<p>No reviews available.</p>'}
+            <button id="backToList" class="button" style="margin-top:20px;">Back</button>
+          </div>
+        `;
+        $('#results').html(html);
+      });
+    });
+
+    $('#results').on('click', '#backToList', function() {
+      discoverMovies(currentPage);
+    });
+
+    $(document).ready(function() {
+      $('#loginBtn').on('click', authenticateWithTMDb);
+      $('#searchBtn').on('click', () => searchMovies($('#searchInput').val()));
+      $('#popularBtn').on('click', () => discoverMovies());
+      $('#favoritesBtn').on('click', showFavorites);
+      $('#watchlistBtn').on('click', showWatchlist);
+
+      $('#genreSelect').on('change', function() {
+        selectedGenre = $(this).val();
+        discoverMovies();
+      });
+
+      $('#sortSelect').on('change', function() {
+        selectedSort = $(this).val();
+        discoverMovies();
+      });
+
+      $('#prevPage').on('click', () => { if (currentPage > 1) discoverMovies(--currentPage); });
+      $('#nextPage').on('click', () => discoverMovies(++currentPage));
+
+      $('#results').on('click', '.fav-btn', function() { toggleFavorite($(this).data('id')); });
+      $('#results').on('click', '.watch-btn', function() { toggleWatchlist($(this).data('id')); });
+
+      createSession();
+      fetchAccount();
+      updateLoginStatus();
+      loadGenres();
+      discoverMovies();
+    });
+  </script>
+</body>
+</html>
