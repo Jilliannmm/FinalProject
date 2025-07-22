@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -62,7 +62,7 @@
   <div id="results" class="container"></div>
 
   <script>
-    const apiKey = e2e32655a6c29555627f49c1ff4a3809;
+    const apiKey = 'e2e32655a6c29555627f49c1ff4a3809'; // 
     let sessionId = localStorage.getItem('tmdb_session');
     let accountId = localStorage.getItem('tmdb_account');
     let currentPage = 1;
@@ -136,7 +136,9 @@
     }
 
     function searchMovies(query) {
+      console.log("Searching for:", query); // ✅ Debug log
       $.getJSON(`https://api.themoviedb.org/3/search/movie?api_key=${apiKey}&query=${query}`, function(data) {
+        console.log("Search results:", data); // ✅ Debug log
         renderMovies(data.results);
       });
     }
@@ -237,3 +239,4 @@
   </script>
 </body>
 </html>
+ 
