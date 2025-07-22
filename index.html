@@ -136,9 +136,9 @@
     }
 
     function searchMovies(query) {
-      console.log("Searching for:", query); // ✅ Debug log
+      console.log("Searching for:", query); // 
       $.getJSON(`https://api.themoviedb.org/3/search/movie?api_key=${apiKey}&query=${query}`, function(data) {
-        console.log("Search results:", data); // ✅ Debug log
+        console.log("Search results:", data); // 
         renderMovies(data.results);
       });
     }
